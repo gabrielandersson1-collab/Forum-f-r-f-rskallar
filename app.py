@@ -7,6 +7,7 @@ app = Flask(__name__)
 app.secret_key = "a8f92c7d4e..."
 
 
+# Skapar en anslutning till databasen "forum" i XAMPP
 def get_db():
     return mysql.connector.connect(
         host="127.0.0.1",
@@ -16,6 +17,7 @@ def get_db():
     )
 
 
+# kollar att man är inloggad annars skickas man till inloggningssidan.
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -25,6 +27,7 @@ def login_required(f):
     return wrapper
 
 
+#  visar inloggningsformuläret och kollar användarnamn och lösenord mot databasen
 @app.route("/", methods=["GET", "POST"])
 def login():
     fel = None
@@ -46,12 +49,14 @@ def login():
     return render_template("login.html", fel=fel)
 
 
+# Loggar ut genom att tömma sessionen
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
 
+#  visar alla trådar (GET) och sparar en ny tråd i databasen när man skickar formuläret (POST).
 @app.route("/forum", methods=["GET", "POST"])
 @login_required
 def forum():
@@ -81,6 +86,7 @@ def forum():
     return render_template("forum.html", username=session["username"], topics=topics)
 
 
+# Visar en tråd med alla inlägg (GET) och sparar ett nytt svar (POST)
 @app.route("/topic/<int:topic_id>", methods=["GET", "POST"])
 @login_required
 def topic(topic_id):
