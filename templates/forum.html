@@ -5,20 +5,23 @@
   <p>Inloggad som {{ username }} | <a href="/logout">Logga ut</a></p>
   <h1>Forum för fårskallar</h1>
 
+  <h2>Ny tråd</h2>
   <form method="post">
-    <textarea name="content" rows="4" cols="50" required></textarea><br>
-    <button>Posta</button>
+    <input name="title" placeholder="Rubrik" size="50" required>
+    <button>Skapa tråd</button>
   </form>
 
-  <hr>
-  {% for post in posts %}
-    <div>
-      <strong>{{ post.username }}</strong>
-      <small>{{ post.created_at.strftime("%Y-%m-%d %H:%M") }}</small>
-      <p>{{ post.content }}</p>
-    </div>
-  {% else %}
-    <p>Inga inlägg ännu.</p>
-  {% endfor %}
+  <h2>Trådar</h2>
+  <ul>
+    {% for t in topics %}
+      <li>
+        <a href="{{ url_for('topic', topic_id=t.id) }}">{{ t.title }}</a>
+        av {{ t.username }}
+        <small>{{ t.created_at.strftime("%Y-%m-%d %H:%M") }}</small>
+      </li>
+    {% else %}
+      <li>Inga trådar ännu. Skapa den första!</li>
+    {% endfor %}
+  </ul>
 </body>
 </html>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session, url_for
+from flask import Flask, render_template, request, redirect, session, url_for, abort
 import mysql.connector
 
 app = Flask(__name__)
@@ -45,24 +45,58 @@ def forum():
 
     if request.method == "POST":
         cur.execute(
-            "INSERT INTO posts (user_id, content) VALUES (%s, %s)",
-            (session["user_id"], request.form["content"])
+            "INSERT INTO topics (title, user_id) VALUES (%s, %s)",
+            (request.form["title"], session["user_id"])
         )
         db.commit()
+        new_id = cur.lastrowid
         cur.close()
         db.close()
-        return redirect(url_for("forum"))
+        return redirect(url_for("topic", topic_id=new_id))
+
+    cur.execute("""
+        SELECT topics.id, topics.title, topics.created_at, users.username
+        FROM topics
+        JOIN users ON topics.user_id = users.id
+        ORDER BY topics.created_at DESC
+    """)
+    topics = cur.fetchall()
+    cur.close()
+    db.close()
+    return render_template("forum.html", username=session["username"], topics=topics)
+
+
+@app.route("/topic/<int:topic_id>")
+def topic(topic_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT topics.id, topics.title, users.username
+        FROM topics
+        JOIN users ON topics.user_id = users.id
+        WHERE topics.id = %s
+    """, (topic_id,))
+    t = cur.fetchone()
+    if not t:
+        cur.close()
+        db.close()
+        abort(404)
 
     cur.execute("""
         SELECT posts.content, posts.created_at, users.username
         FROM posts
         JOIN users ON posts.user_id = users.id
-        ORDER BY posts.created_at DESC
-    """)
+        WHERE posts.topic_id = %s
+        ORDER BY posts.created_at ASC
+    """, (topic_id,))
     posts = cur.fetchall()
     cur.close()
     db.close()
-    return render_template("forum.html", username=session["username"], posts=posts)
+    return render_template("topic.html", username=session["username"], topic=t, posts=posts)
 
 
 @app.route("/logout")

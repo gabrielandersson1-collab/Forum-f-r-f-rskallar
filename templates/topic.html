@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head><meta charset="UTF-8"><title>{{ topic.title }}</title></head>
+<body>
+  <p>Inloggad som {{ username }} | <a href="/forum">Till trådlistan</a> | <a href="/logout">Logga ut</a></p>
+  <h1>{{ topic.title }}</h1>
+  <p><small>Skapad av {{ topic.username }}</small></p>
+  <hr>
+
+  {% for post in posts %}
+    <div>
+      <strong>{{ post.username }}</strong>
+      <small>{{ post.created_at.strftime("%Y-%m-%d %H:%M") }}</small>
+      <p>{{ post.content }}</p>
+    </div>
+  {% else %}
+    <p>Inga inlägg i tråden ännu.</p>
+  {% endfor %}
+</body>
+</html>
