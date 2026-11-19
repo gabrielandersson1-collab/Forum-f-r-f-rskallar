@@ -1,8 +1,10 @@
+from functools import wraps
 from flask import Flask, render_template, request, redirect, session, url_for, abort
+from werkzeug.security import check_password_hash
 import mysql.connector
 
 app = Flask(__name__)
-app.secret_key = "byt-ut-mig-till-nagot-eget"
+app.secret_key = "a8f92c7d4e..."
 
 
 def get_db():
@@ -14,6 +16,15 @@ def get_db():
     )
 
 
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
 @app.route("/", methods=["GET", "POST"])
 def login():
     fel = None
@@ -21,13 +32,13 @@ def login():
         db = get_db()
         cur = db.cursor(dictionary=True)
         cur.execute(
-            "SELECT * FROM users WHERE username = %s AND password = %s",
-            (request.form["username"], request.form["password"])
+            "SELECT * FROM users WHERE username = %s",
+            (request.form["username"],)
         )
         user = cur.fetchone()
         cur.close()
         db.close()
-        if user:
+        if user and check_password_hash(user["password"], request.form["password"]):
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             return redirect(url_for("forum"))
@@ -35,11 +46,15 @@ def login():
     return render_template("login.html", fel=fel)
 
 
-@app.route("/forum", methods=["GET", "POST"])
-def forum():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
+
+@app.route("/forum", methods=["GET", "POST"])
+@login_required
+def forum():
     db = get_db()
     cur = db.cursor(dictionary=True)
 
@@ -66,11 +81,9 @@ def forum():
     return render_template("forum.html", username=session["username"], topics=topics)
 
 
-@app.route("/topic/<int:topic_id>")
+@app.route("/topic/<int:topic_id>", methods=["GET", "POST"])
+@login_required
 def topic(topic_id):
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
     db = get_db()
     cur = db.cursor(dictionary=True)
 
@@ -86,6 +99,16 @@ def topic(topic_id):
         db.close()
         abort(404)
 
+    if request.method == "POST":
+        cur.execute(
+            "INSERT INTO posts (user_id, topic_id, content) VALUES (%s, %s, %s)",
+            (session["user_id"], topic_id, request.form["content"])
+        )
+        db.commit()
+        cur.close()
+        db.close()
+        return redirect(url_for("topic", topic_id=topic_id))   # post-redirect-get
+
     cur.execute("""
         SELECT posts.content, posts.created_at, users.username
         FROM posts
@@ -97,12 +120,6 @@ def topic(topic_id):
     cur.close()
     db.close()
     return render_template("topic.html", username=session["username"], topic=t, posts=posts)
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
 
 if __name__ == "__main__":
