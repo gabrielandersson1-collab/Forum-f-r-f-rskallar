@@ -1,12 +1,34 @@
-from flask import Blueprint, render_template, request, redirect, session, url_for, abort
+from functools import wraps
+from flask import Flask, render_template, request, redirect, session, url_for, abort
 from werkzeug.security import check_password_hash
-from db import get_db, login_required
+import mysql.connector
 
-main = Blueprint("main", __name__)
+app = Flask(__name__)
+app.secret_key = "a8f92c7d4e..."
 
 
-# Startsidan: visar inloggningsformuläret och kollar användarnamn och lösenord mot databasen.
-@main.route("/", methods=["GET", "POST"])
+# Skapar en anslutning till databasen "forum" i XAMPP alla routes använder den här
+def get_db():
+    return mysql.connector.connect(
+        host="127.0.0.1",
+        user="root",
+        password="",          # XAMPP har tomt lösenord som standard
+        database="forum"
+    )
+
+
+# Dekorator som kollar att man är inloggada annars skickas man till inloggningssidan.
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# visar inloggningsformuläret och kollar användarnamn och lösenord mot databasen
+@app.route("/", methods=["GET", "POST"])
 def login():
     fel = None
     if request.method == "POST":
@@ -22,20 +44,20 @@ def login():
         if user and check_password_hash(user["password"], request.form["password"]):
             session["user_id"] = user["id"]
             session["username"] = user["username"]
-            return redirect(url_for("main.forum"))
+            return redirect(url_for("forum"))
         fel = "Fel användarnamn eller lösenord"
     return render_template("login.html", fel=fel)
 
 
-# Loggar ut genom att tömma sessionen och skickar tillbaka till inloggningen.
-@main.route("/logout")
+# Loggar ut genom att tömma sessionen och skickar tillbaka till inloggningen
+@app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("main.login"))
+    return redirect(url_for("login"))
 
 
-# Trådlistan: visar alla trådar (GET) och sparar en ny tråd när man skickar formuläret (POST).
-@main.route("/forum", methods=["GET", "POST"])
+# visar alla trådar GET och sparar en ny tråd i databasen när man skickar formuläret POST
+@app.route("/forum", methods=["GET", "POST"])
 @login_required
 def forum():
     db = get_db()
@@ -50,7 +72,7 @@ def forum():
         new_id = cur.lastrowid
         cur.close()
         db.close()
-        return redirect(url_for("main.topic", topic_id=new_id))
+        return redirect(url_for("topic", topic_id=new_id))
 
     cur.execute("""
         SELECT topics.id, topics.title, topics.created_at, users.username
@@ -64,8 +86,8 @@ def forum():
     return render_template("forum.html", username=session["username"], topics=topics)
 
 
-# Visar en tråd med alla inlägg (GET) och sparar ett nytt svar (POST). Efter POST görs en redirect (post-redirect-get).
-@main.route("/topic/<int:topic_id>", methods=["GET", "POST"])
+# Visar en tråd med alla inlägg GET och sparar ett nytt svar POST .
+@app.route("/topic/<int:topic_id>", methods=["GET", "POST"])
 @login_required
 def topic(topic_id):
     db = get_db()
@@ -91,7 +113,7 @@ def topic(topic_id):
         db.commit()
         cur.close()
         db.close()
-        return redirect(url_for("main.topic", topic_id=topic_id))
+        return redirect(url_for("topic", topic_id=topic_id))   # post-redirect-get
 
     cur.execute("""
         SELECT posts.content, posts.created_at, users.username
@@ -104,3 +126,7 @@ def topic(topic_id):
     cur.close()
     db.close()
     return render_template("topic.html", username=session["username"], topic=t, posts=posts)
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
